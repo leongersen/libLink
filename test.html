@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+
+	<head>
+		<link href="http://code.jquery.com/qunit/qunit-1.12.0.css" rel="stylesheet">
+		<script src="http://code.jquery.com/qunit/qunit-1.12.0.js"></script>
+		<script src="http://cdnjs.cloudflare.com/ajax/libs/jquery/1.7/jquery.min.js"></script>
+		<script src="jquery.liblink.js"></script>
+	</head>
+
+	<div id="qunit"></div>
+	<div id="qunit-fixture"></div>
+
+	<script>
+		var Q = $("#qunit-fixture");
+	</script>
+
+	<script>
+
+		$.fn.faux = function(){
+			return this.each(function(){
+				var that = this;
+				this.LinkConfirm = function ( flag, element ) {
+					equal(that, this);
+					if ( element ) {
+						element.appendTo(that);
+					}
+					return function ( event, value ) {
+						ok( event instanceof $.Event );
+					}
+				};
+				this.LinkUpdate = function ( flag ) {
+					this.linkAPI[flag].change( flag, 'Hello there!' );
+				};
+				this.LinkDefaultFlag = 'he';
+			});
+		};
+
+		test( "Inline elements", function(){
+
+			Q.html('\
+				<div id="element"></div>\
+			');
+			
+			var el = $("#element").faux();
+
+			el.Link('test', {
+				target: "-inline-"
+			});
+
+			el.Link({
+				target: "-inline-<div class='cake'></div>"
+			});
+
+			equal(el.children().length, 2);
+			equal(el.find('.cake').length, 1);
+			equal(el.find('.cake').html(), 'he');
+			equal(el.children().first().html(), 'test');
+			
+			el.children().first().html('');
+			el.find('.cake').html('');
+			
+			el[0].LinkUpdate('he');
+			
+			equal(el.children().first().html(), '', "Change on another flag didn't reset this one.");
+			equal(el.find('.cake').html(), 'he');
+		});
+		
+		test( "Input insertion, unbinding", function(){
+
+			Q.html('\
+				<div id="element"></div>\
+			');
+			
+			var el = $("#element").faux();
+
+			el.Link('hi', {
+				target: "input1"
+			});
+
+			el.Link({
+				target: "input2"
+			});
+			
+			equal( Q.find('input').length, 2 );
+			equal( Q.find('input:first').val(), 'hi' );
+			equal( Q.find('input:last').val(), 'he' );
+			
+			throws ( function(){ el[0].LinkUpdate( '3' ) } );		
+
+			ok(el[0].linkAPI);
+			
+			el.Link(false);
+			
+			ok(!el[0].linkAPI);
+		});
+		
+		test( "Function as target", function(){
+
+			expect(3 + 1);
+		
+			Q.html('\
+				<div id="element"></div>\
+			');
+			
+			var el = $("#element").faux();
+
+			el.Link('func', {
+				target: function ( value, additional ){
+					equal( value, 'func' );
+					equal( additional, 'Hello there!' );
+				}
+			});
+			
+			ok(el.is(':empty'));
+		});
+		
+		test( "From instance", function(){
+
+			expect(6 + 4);
+		
+			Q.html('\
+				<div id="element"></div>\
+				<input id="inp">\
+				<span id="span"></span>\
+				<span id="span2"></span>\
+				<span id="span3"></span>\
+				<span id="span4"></span>\
+			');
+			
+			var el = $("#element").faux(), inp = $("#inp"), span = $("#span"), span2 = $("#span2"), span3 = $("#span3"), span4 = $("#span4");
+
+			el.Link('input', {
+				target: inp
+			});
+			
+			el.Link('html', {
+				target: span
+			});
+
+			throws(function(){
+				el.Link('html', {
+					target: span2,
+					method: 'iDoNotExist'
+				});
+			});
+			
+			el.Link('html', {
+				target: span3,
+				method: function( value, x ){
+					$(this).html( value );
+					equal(x, 'Hello there!');
+				}				
+			});
+			
+			el.Link('someflaghere', {
+				target: span4,
+				method: 'text'	
+			});
+			
+			equal(span4.text(), 'someflaghere');
+			
+			equal(inp.val(), 'input');
+			inp.val(6);
+			inp.trigger('change');
+			
+			equal(span.html(), 'html');
+			
+			span.change();
+		});
+
+	</script>
+
+	
+	
+	
+	
+	
+	
+	
+	
