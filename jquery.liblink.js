@@ -25,7 +25,7 @@
 			this.method = method || 'html';
 
 			// Use jQuery to create the element
-			this.el = $( target.replace('-inline-', '') || '<div/>' )[0];
+			this.target = this.el = $( target.replace('-inline-', '') || '<div/>' );
 
 			return true;
 		}
@@ -38,9 +38,11 @@
 
 			this.method = 'val';
 
-			this.el = document.createElement('input');
-			this.el.name = target;
-			this.el.type = 'hidden';
+			var element = document.createElement('input');
+				element.name = target;
+				element.type = 'hidden';
+
+			this.target = this.el = $(element);
 
 			return true;
 		}
@@ -97,21 +99,19 @@
 		}
 	}
 
+var
+/** @const */
+	creationFunctions = [fromPrefix, fromString, fromFunction, fromInstance, fromInstanceMethod];
+
 
 // Link Instance
 
 /** @constructor */
-	function Link ( entry, update ) {
+	function Link ( target, method, format, update ) {
 
-		if ( typeof entry !== "object" ) {
-			throw new Error("(Link) Initialize with an object.");
-		}
+		var that = this, i = creationFunctions.length;
 
-		if ( !(this instanceof Link) ) {
-			return new Link( entry, update );
-		}
-
-		var that = this;
+		target = target;
 
 		// Forward calls within scope.
 		this.changeHandler = function ( changeEvent ) {
@@ -128,53 +128,28 @@
 			that.changeHandlerMethod.call( '', changeEvent, decodedValue );
 		}
 
-		// Make sure Link isn't called as a function, in which case
-		// the 'this' scope would be the window.
-		this.init(
-			entry['target'] || function(){},
-			entry['method'],
-			entry['format'] || { 'to': String, 'from': Number },
-			update
-		);
+		// Store the update option.
+		this.update = !update;
 
 		// See if this Link needs individual targets based on its usage.
 		// If so, return the element that needs to be copied by the
 		// implementing interface.
-		this.needsClone = function(){
-			return this.el || false;
-		};
+		// Default the element to false.
+		this.el = false;
 
-		// Create a new instance.
-		this.clone = function( target ){
-			return new Link({
-				'target': target,
-				'method': this.method,
-				'format': this.formatInstance
-			}, true);
-		};
-	}
-
-	// Gets arguments from constructor.
-	Link.prototype.init = function ( target, method, format, update ) {
-
-		var f = [fromPrefix, fromString, fromFunction, fromInstance, fromInstanceMethod], i = f.length;
-
-		// Create a new Formatter. The constructor accepts 'undefined'.
+		// Store the formatter, or use the default.
 		this.formatInstance = format;
-
-		// Store the update option.
-		this.update = !update;
 
 		// Try all Link types.
 		while ( i-- ) {
-			if ( f[(f.length-1)-i].call(this, target, method) ) {
+			if ( creationFunctions[(creationFunctions.length-1)-i].call(this, target, method) ) {
 				return;
 			}
 		}
 
 		// Nothing matched, throw error.
 		throw new RangeError("(Link) Invalid Link.");
-	};
+	}
 
 	// Provides external items with the slider value.
 	Link.prototype.set = function ( value, update ) {
@@ -214,7 +189,7 @@
 		this.items = [];
 	}
 
-	LinkAPI.prototype.push = function( item ){
+	LinkAPI.prototype.push = function( item ) {
 		this.items.push(item);
 	};
 
@@ -251,49 +226,40 @@
 
 			// Remove all bound items.
 			if ( flag === false ) {
-				delete this.linkAPI;
+				delete this['linkAPI'];
 				return;
 			}
 
 			// If flag is null, use the default provided by the plugin.
 			if ( !flag ) {
-				flag = that.LinkDefaultFlag;
+				flag = that['LinkDefaultFlag'];
 			}
 
 			// Create a list of API's (if it didn't exist yet);
-			if ( !this.linkAPI ) {
-				this.linkAPI = [];
+			if ( !this['linkAPI'] ) {
+				this['linkAPI'] = [];
 			}
-			
+
 			// Add an API point.
-			if ( !this.linkAPI[flag] ) {
-				this.linkAPI[flag] = new LinkAPI();
+			if ( !this['linkAPI'][flag] ) {
+				this['linkAPI'][flag] = new LinkAPI();
 			}
 
 			// Alias the list.
-			list = this.linkAPI[flag];
+			list = this['linkAPI'][flag];
 
 			// Loop all passed linkInstances.
-			$.each(args, function ( ignore, linkInstance ){
+			$.each(args, function ( ignore, linkOptions ){
 
-				linkInstance = new Link(linkInstance);
+				if ( typeof linkOptions !== "object" ) {
+					throw new Error("(Link) Initialize with an object.");
+				}
+
+				var linkInstance = new Link ( linkOptions['target'] || function(){}, linkOptions['method'], linkOptions['format'] || that['LinkDefaultFormatter'] );
 
 				// If the Link requires creation of a new element,
-				// create this element and create a new Link instance.
-				var targetElement = linkInstance.needsClone(), changeHandler;
-
-				// Clone the old element (which isn't in the DOM).
-				if ( targetElement ) {
-					targetElement = $( targetElement ).clone();
-				}
-
-				//  Request confirmation to get the changehandler.
-				changeHandler = that.LinkConfirm.call ( that, flag, targetElement );
-
-				// Clone the Link and configure it.
-				if ( targetElement ) {
-					linkInstance = linkInstance.clone( targetElement )
-				}
+				// Pass the element and request confirmation to get the changehandler.
+				var changeHandler = that['LinkConfirm'].call ( that, flag, linkInstance.el );
 
 				// Set the method to be called when a Link changes.
 				linkInstance.changeHandlerMethod = changeHandler;
@@ -303,7 +269,7 @@
 			});
 
 			// Now that Link have been connected, request an update.
-			this.LinkUpdate.call( this, flag );
+			this['LinkUpdate'].call( this, flag );
 		});
 	};
 
