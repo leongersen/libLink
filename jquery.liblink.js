@@ -41,7 +41,6 @@
 			var element = document.createElement('input');
 				element.name = target;
 				element.type = 'hidden';
-
 			this.target = this.el = $(element);
 
 			return true;
@@ -69,8 +68,8 @@
 
 				// Default to .val if this is an input element.
 				this.method = 'val';
-				// Set the slider to a new value on change.
 
+				// Fire the API changehandler when the target changes.
 				this.target = target.on('change', this.changeHandler);
 
 			} else {
@@ -151,7 +150,7 @@ var
 		throw new RangeError("(Link) Invalid Link.");
 	}
 
-	// Provides external items with the slider value.
+	// Provides external items with the object value.
 	Link.prototype.set = function ( value, update ) {
 
 		// Don't synchronize this Link.
@@ -175,7 +174,7 @@ var
 		);
 
 		// When target is undefined, the target was a function.
-		// In that case, provided the slider as the calling scope.
+		// In that case, provided the object as the calling scope.
 		// Branch between writing to a function or an object.
 		( typeof this.method === 'function' ?
 			this.method :
@@ -185,24 +184,34 @@ var
 
 // Developer API
 
-	function LinkAPI () {
+	function LinkAPI ( origin ) {
 		this.items = [];
+		this.elements = [];
+		this.origin = origin;
 	}
 
-	LinkAPI.prototype.push = function( item ) {
+	LinkAPI.prototype.push = function( item, element ) {
 		this.items.push(item);
+		this.elements.push(element);
 	};
 
+	LinkAPI.prototype.reconfirm = function ( flag ) {
+		var i;
+		for ( i = 0; i < this.elements.length; i++ ) {
+			this.origin['LinkConfirm'].call(this.origin, flag, this.elements[i]);
+		}
+	};
+	
 	LinkAPI.prototype.change = function ( value ) {
 
-		var args = Array.prototype.slice.call( arguments, 1 );
+		var args = Array.prototype.slice.call( arguments, 1 ), i;
 		args.unshift( value, true );
 
 		// Write values to serialization Links.
 		// Convert the value to the correct relative representation.
-		$(this.items).each(function(){
-			this.set.apply(this, args);
-		});
+		for ( i = 0; i < this.items.length; i++ ) {
+			this.items[i].set.apply(this.items[i], args);
+		}
 	};
 
 
@@ -242,7 +251,7 @@ var
 
 			// Add an API point.
 			if ( !this['linkAPI'][flag] ) {
-				this['linkAPI'][flag] = new LinkAPI();
+				this['linkAPI'][flag] = new LinkAPI(that);
 			}
 
 			// Alias the list.
@@ -257,6 +266,11 @@ var
 
 				var linkInstance = new Link ( linkOptions['target'] || function(){}, linkOptions['method'], linkOptions['format'] || that['LinkDefaultFormatter'] );
 
+				// Default the calling scope to the linked object.
+				if ( !linkInstance.target ) {
+					linkInstance.target = $(that);
+				}
+
 				// If the Link requires creation of a new element,
 				// Pass the element and request confirmation to get the changehandler.
 				var changeHandler = that['LinkConfirm'].call ( that, flag, linkInstance.el );
@@ -265,7 +279,7 @@ var
 				linkInstance.changeHandlerMethod = changeHandler;
 
 				// Store the linkInstance in the flagged list.
-				list.push( linkInstance );
+				list.push( linkInstance, linkInstance.el );
 			});
 
 			// Now that Link have been connected, request an update.
