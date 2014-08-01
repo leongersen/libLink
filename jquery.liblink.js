@@ -1,5 +1,4 @@
 /*jslint browser: true */
-/*jslint sub: true */
 /*jslint white: true */
 
 (function( $ ){
@@ -10,7 +9,7 @@
 
 	// Test in an object is an instance of jQuery or Zepto.
 	function isInstance ( a ) {
-		return a instanceof $ || ( $['zepto'] && $['zepto']['isZ'](a) );
+		return a instanceof $ || ( $.zepto && $.zepto.isZ(a) );
 	}
 
 
@@ -106,11 +105,9 @@ var
 // Link Instance
 
 /** @constructor */
-	function Link ( target, method, format, update ) {
+	function Link ( target, method, format ) {
 
-		var that = this, i = creationFunctions.length;
-
-		target = target;
+		var that = this, valid = false;
 
 		// Forward calls within scope.
 		this.changeHandler = function ( changeEvent ) {
@@ -125,10 +122,7 @@ var
 			}
 
 			that.changeHandlerMethod.call( '', changeEvent, decodedValue );
-		}
-
-		// Store the update option.
-		this.update = !update;
+		};
 
 		// See if this Link needs individual targets based on its usage.
 		// If so, return the element that needs to be copied by the
@@ -140,37 +134,34 @@ var
 		this.formatInstance = format;
 
 		// Try all Link types.
-		while ( i-- ) {
-			if ( creationFunctions[(creationFunctions.length-1)-i].call(this, target, method) ) {
-				return;
-			}
-		}
+		/*jslint unparam: true*/
+		$.each(creationFunctions, function(i, fn){
+			valid = fn.call(that, target, method);
+			return !valid;
+		});
+		/*jslint unparam: false*/
 
 		// Nothing matched, throw error.
-		throw new RangeError("(Link) Invalid Link.");
+		if ( !valid ) {
+			throw new RangeError("(Link) Invalid Link.");
+		}
 	}
 
 	// Provides external items with the object value.
-	Link.prototype.set = function ( value, update ) {
+	Link.prototype.set = function ( value ) {
 
-		// Don't synchronize this Link.
-		if ( this.update && update === false ) {
-			return;
-		}
-
-		// Ignore named arguments value and update, so only the passed-on
-		// arguments remain.
+		// Ignore the value, so only the passed-on arguments remain.
 		var args = Array.prototype.slice.call( arguments ),
-			additionalArgs = args.slice(2);
+			additionalArgs = args.slice(1);
 
 		// Store some values. The actual, numerical value,
 		// the formatted value and the parameters for use in 'resetValue'.
 		// Slice additionalArgs to break the relation.
-		this.lastSetValue = value;
+		this.lastSetValue = this.formatInstance.to( value );
 
 		// Prepend the value to the function arguments.
 		additionalArgs.unshift(
-			this.formatInstance.to( value )
+			this.lastSetValue
 		);
 
 		// When target is undefined, the target was a function.
@@ -197,19 +188,19 @@ var
 
 	LinkAPI.prototype.reconfirm = function ( flag ) {
 		var i;
-		for ( i = 0; i < this.elements.length; i++ ) {
-			this.origin['LinkConfirm'].call(this.origin, flag, this.elements[i]);
+		for ( i = 0; i < this.elements.length; i += 1 ) {
+			this.origin.LinkConfirm(flag, this.elements[i]);
 		}
 	};
-	
+
 	LinkAPI.prototype.change = function ( value ) {
 
 		var args = Array.prototype.slice.call( arguments, 1 ), i;
-		args.unshift( value, true );
+		args.unshift( value );
 
 		// Write values to serialization Links.
 		// Convert the value to the correct relative representation.
-		for ( i = 0; i < this.items.length; i++ ) {
+		for ( i = 0; i < this.items.length; i += 1 ) {
 			this.items[i].set.apply(this.items[i], args);
 		}
 	};
@@ -217,74 +208,69 @@ var
 
 // jQuery plugin
 
-	/** @export */
-	$.fn.Link = function(){
+	function binder ( flag, target, method, format ){
 
-	var args = Array.prototype.slice.call( arguments ),
-		flag = args[0];
-
-		if ( typeof flag === 'string' ) {
-			args = args.slice(1);
-		} else if ( flag !== false ) {
-			flag = null;
+		if ( flag === 0 ) {
+			flag = this.LinkDefaultFlag;
 		}
 
-		return this.each(function(){
+		// Create a list of API's (if it didn't exist yet);
+		if ( !this.linkAPI ) {
+			this.linkAPI = [];
+		}
 
-			var that = this, list;
+		// Add an API point.
+		if ( !this.linkAPI[flag] ) {
+			this.linkAPI[flag] = new LinkAPI(this);
+		}
 
-			// Remove all bound items.
-			if ( flag === false ) {
-				delete this['linkAPI'];
-				return;
-			}
+		var linkInstance = new Link ( target, method, format || this.LinkDefaultFormatter );
 
-			// If flag is null, use the default provided by the plugin.
-			if ( !flag ) {
-				flag = that['LinkDefaultFlag'];
-			}
+		// Default the calling scope to the linked object.
+		if ( !linkInstance.target ) {
+			linkInstance.target = $(this);
+		}
 
-			// Create a list of API's (if it didn't exist yet);
-			if ( !this['linkAPI'] ) {
-				this['linkAPI'] = [];
-			}
+		// If the Link requires creation of a new element,
+		// Pass the element and request confirmation to get the changehandler.
+		// Set the method to be called when a Link changes.
+		linkInstance.changeHandlerMethod = this.LinkConfirm( flag, linkInstance.el );
 
-			// Add an API point.
-			if ( !this['linkAPI'][flag] ) {
-				this['linkAPI'][flag] = new LinkAPI(that);
-			}
+		// Store the linkInstance in the flagged list.
+		this.linkAPI[flag].push( linkInstance, linkInstance.el );
 
-			// Alias the list.
-			list = this['linkAPI'][flag];
+		// Now that Link have been connected, request an update.
+		this.LinkUpdate( flag );
+	}
 
-			// Loop all passed linkInstances.
-			$.each(args, function ( ignore, linkOptions ){
+	/** @export */
+	$.fn.Link = function( flag ){
 
-				if ( typeof linkOptions !== "object" ) {
-					throw new Error("(Link) Initialize with an object.");
-				}
-
-				var linkInstance = new Link ( linkOptions['target'] || function(){}, linkOptions['method'], linkOptions['format'] || that['LinkDefaultFormatter'] );
-
-				// Default the calling scope to the linked object.
-				if ( !linkInstance.target ) {
-					linkInstance.target = $(that);
-				}
-
-				// If the Link requires creation of a new element,
-				// Pass the element and request confirmation to get the changehandler.
-				var changeHandler = that['LinkConfirm'].call ( that, flag, linkInstance.el );
-
-				// Set the method to be called when a Link changes.
-				linkInstance.changeHandlerMethod = changeHandler;
-
-				// Store the linkInstance in the flagged list.
-				list.push( linkInstance, linkInstance.el );
+		var that = this;
+	
+		// Delete all linkAPI
+		if ( flag === false ) {
+			return that.each(function(){
+				delete this.linkAPI;
 			});
+		}
 
-			// Now that Link have been connected, request an update.
-			this['LinkUpdate'].call( this, flag );
-		});
+		if ( flag === undefined ) {
+
+			flag = 0;
+
+		} else if ( typeof flag !== 'string') {
+
+			throw new Error("Flag must be string.");
+		}
+
+		return {
+			to: function( a, b, c ){
+				return that.each(function(){
+					binder.call(this, flag, a, b, c);
+				});
+			}
+		};
 	};
 
-}( window['jQuery'] || window['Zepto'] ));
+}( window.jQuery || window.Zepto ));
