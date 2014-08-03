@@ -4,7 +4,8 @@
 		<link href="http://code.jquery.com/qunit/qunit-1.12.0.css" rel="stylesheet">
 		<script src="http://code.jquery.com/qunit/qunit-1.12.0.js"></script>
 		<script src="http://cdnjs.cloudflare.com/ajax/libs/jquery/1.7/jquery.min.js"></script>
-		<script src="jquery.liblink.js"></script>
+		<script src="http://cdnjs.cloudflare.com/ajax/libs/blanket.js/1.1.4/blanket.min.js"></script>
+		<script src="jquery.liblink.js" data-cover></script>
 		<title>libLink</title>
 	</head>
 
@@ -70,29 +71,39 @@
 
 		test( "Input insertion, unbinding", function(){
 
-			expect( 6 + 2 );
+			expect( 9 + 3 );
 			
 			Q.html('\
 				<div id="element"></div>\
+				<input id="input-element">\
 			');
 
-			var el = $("#element").faux();
+			var el = $("#element").faux(), input = $("#input-element");
 
 			el.Link('hi').to("input1"); // 1 update
+			el.Link('hi').to(input); // 1 update
+			
+			equal(input.val(), 'hi');
+			input.change(); // 'hi' won't parse to a number, no change 'ok' is fired.
+			input.val(4).change(); // now it fires
 
 			el.Link('he').to("input2"); // 1 update
 
-			equal( Q.find('input').length, 2, 'Inputs where created' );
-			equal( Q.find('input:first').val(), 'hi', 'Flag was properly set' );
-			equal( Q.find('input:last').val(), 'he', 'Flag set' );
+			equal( Q.find('input[name]').length, 2, 'Inputs where created' );
+			equal( Q.find('input[name]:first').val(), 'hi', 'Flag was properly set' );
+			equal( Q.find('input[name]:last').val(), 'he', 'Flag set' );
 
 			throws ( function(){ el[0].LinkUpdate( '3' ) } );
 
 			ok( el[0].linkAPI, 'Element has LinkAPI' );
 
 			el.Link(false);
+			
+			input.change(); // The change event should be removed from the element,
+			// so no change 'ok' is added to the expected count..
 
 			ok( !el[0].linkAPI, 'LinkAPI was removed' );
+			equal( Q.find('input[name]').length, 0, 'Inputs where removed' );
 		});
 
 		test( "Function as target", function(){

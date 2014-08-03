@@ -69,7 +69,7 @@
 				this.method = 'val';
 
 				// Fire the API changehandler when the target changes.
-				this.target = target.on('change', this.changeHandler);
+				this.target = target.on('change.liblink', this.changeHandler);
 
 			} else {
 
@@ -183,13 +183,27 @@ var
 
 	LinkAPI.prototype.push = function( item, element ) {
 		this.items.push(item);
-		this.elements.push(element);
+
+		// Prevent 'false' elements
+		if ( element ) {
+			this.elements.push(element);
+		}
 	};
 
 	LinkAPI.prototype.reconfirm = function ( flag ) {
 		var i;
 		for ( i = 0; i < this.elements.length; i += 1 ) {
 			this.origin.LinkConfirm(flag, this.elements[i]);
+		}
+	};
+
+	LinkAPI.prototype.remove = function ( flag ) {
+		var i;
+		for ( i = 0; i < this.items.length; i += 1 ) {
+			this.items[i].target.off('.liblink');
+		}
+		for ( i = 0; i < this.elements.length; i += 1 ) {
+			this.elements[i].remove();
 		}
 	};
 
@@ -216,7 +230,7 @@ var
 
 		// Create a list of API's (if it didn't exist yet);
 		if ( !this.linkAPI ) {
-			this.linkAPI = [];
+			this.linkAPI = {};
 		}
 
 		// Add an API point.
@@ -247,10 +261,22 @@ var
 	$.fn.Link = function( flag ){
 
 		var that = this;
-	
+
 		// Delete all linkAPI
 		if ( flag === false ) {
+
 			return that.each(function(){
+
+				// .Link(false) can be called on elements without Links.
+				// When that happens, the objects can't be looped.
+				if ( !this.linkAPI ) {
+					return;
+				}
+
+				$.map(this.linkAPI, function(api){
+					api.remove();
+				});
+
 				delete this.linkAPI;
 			});
 		}
