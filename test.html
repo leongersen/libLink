@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+
+	<head>
+		<link href="http://code.jquery.com/qunit/qunit-1.12.0.css" rel="stylesheet">
+		<script src="http://code.jquery.com/qunit/qunit-1.12.0.js"></script>
+		<script src="http://cdnjs.cloudflare.com/ajax/libs/jquery/1.7/jquery.min.js"></script>
+		<script src="http://cdnjs.cloudflare.com/ajax/libs/blanket.js/1.1.4/blanket.min.js"></script>
+		<script src="jquery.liblink.js" data-cover></script>
+		<title>libLink</title>
+	</head>
+
+	<div id="qunit"></div>
+	<div id="qunit-fixture"></div>
+
+	<script>
+		var Q = $("#qunit-fixture");
+	</script>
+
+	<script>
+
+		$.fn.faux = function(){
+			return this.each(function(){
+			
+				var that = this;
+				
+				this.LinkConfirm = function ( flag, element ) {
+					equal(that, this, 'scope is correct in confirm');
+					if ( element ) {
+						element.appendTo(that);
+					}
+					return function ( event, value ) {
+						ok( event instanceof $.Event, 'Change handler fired' );
+					}
+				};
+				
+				this.LinkUpdate = function ( flag ) {
+					this.linkAPI[flag].change( flag, 'Hello there!' );
+				};
+				
+				this.LinkDefaultFlag = 'defaultFlagValue';
+				
+				this.LinkDefaultFormatter = { 'to': String, 'from': Number };
+			});
+		};
+
+		test( "Inline elements", function(){
+
+			Q.html('\
+				<div id="element"></div>\
+			');
+
+			var el = $("#element").faux();
+
+			el.Link('test').to("-inline-");
+
+			el.Link('he').to("-inline-<div class='cake'></div>");
+
+			equal(el.children().length, 2);
+			equal(el.find('.cake').length, 1);
+			equal(el.find('.cake').html(), 'he');
+			equal(el.children().first().html(), 'test');
+
+			el.children().first().html('');
+			el.find('.cake').html('');
+
+			el[0].LinkUpdate('he');
+
+			equal(el.children().first().html(), '', "Change on another flag didn't reset this one.");
+			equal(el.find('.cake').html(), 'he');
+		});
+
+		test( "Input insertion, unbinding", function(){
+
+			expect( 9 + 3 );
+			
+			Q.html('\
+				<div id="element"></div>\
+				<input id="input-element">\
+			');
+
+			var el = $("#element").faux(), input = $("#input-element");
+
+			el.Link('hi').to("input1"); // 1 update
+			el.Link('hi').to(input); // 1 update
+			
+			equal(input.val(), 'hi');
+			input.change(); // 'hi' won't parse to a number, no change 'ok' is fired.
+			input.val(4).change(); // now it fires
+
+			el.Link('he').to("input2"); // 1 update
+
+			equal( Q.find('input[name]').length, 2, 'Inputs where created' );
+			equal( Q.find('input[name]:first').val(), 'hi', 'Flag was properly set' );
+			equal( Q.find('input[name]:last').val(), 'he', 'Flag set' );
+
+			throws ( function(){ el[0].LinkUpdate( '3' ) } );
+
+			ok( el[0].linkAPI, 'Element has LinkAPI' );
+
+			el.Link(false);
+			
+			input.change(); // The change event should be removed from the element,
+			// so no change 'ok' is added to the expected count..
+
+			ok( !el[0].linkAPI, 'LinkAPI was removed' );
+			equal( Q.find('input[name]').length, 0, 'Inputs where removed' );
+		});
+
+		test( "Function as target", function(){
+
+			expect(3 + 1);
+
+			Q.html('\
+				<div id="element"></div>\
+			');
+
+			var el = $("#element").faux();
+
+			el.Link('func').to(function ( value, additional ){
+				equal( value, 'func' );
+				equal( additional, 'Hello there!' );
+			});
+
+			ok(el.is(':empty'));
+		});
+
+		test( "From instance", function(){
+
+			expect(6 + 4);
+
+			Q.html('\
+				<div id="element"></div>\
+				<input id="inp">\
+				<span id="span"></span>\
+				<span id="span2"></span>\
+				<span id="span3"></span>\
+				<span id="span4"></span>\
+			');
+
+			var el = $("#element").faux(), inp = $("#inp"), span = $("#span"), span2 = $("#span2"), span3 = $("#span3"), span4 = $("#span4");
+
+			el.Link('input').to(inp); // 1 confirm
+			el.Link('html').to(span); // 1 confirm
+
+			throws(function(){
+				el.Link('html').to(span2, 'iDoNotExist'); // no confirm
+			}, 'Method must exist');
+
+			el.Link('html').to(span3, function( value, x ){
+				$(this).html( value );
+				equal(x, 'Hello there!', 'Caught the message');
+			}); // 1 confirm
+
+			el.Link('someflaghere').to(span4, 'text'); // 1 confirm
+
+			equal(span4.text(), 'someflaghere', 'Flag was written to span');
+
+			equal(inp.val(), 'input', 'Flag was written to input');
+			
+			inp.val(6);
+			inp.trigger('change');
+
+			equal(span.html(), 'html', 'Flag didn\'t change');
+
+			// Could bump expect.
+			span.change();
+		});
+
+	</script>
