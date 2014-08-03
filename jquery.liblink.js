@@ -175,6 +175,7 @@ var
 
 // Developer API
 
+/** @constructor */
 	function LinkAPI ( origin ) {
 		this.items = [];
 		this.elements = [];
