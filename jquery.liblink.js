@@ -210,6 +210,12 @@ var
 
 	LinkAPI.prototype.change = function ( value ) {
 
+		if ( this.origin.LinkIsEmitting ) {
+			return false;
+		}
+
+		this.origin.LinkIsEmitting = true;
+
 		var args = Array.prototype.slice.call( arguments, 1 ), i;
 		args.unshift( value );
 
@@ -218,6 +224,8 @@ var
 		for ( i = 0; i < this.items.length; i += 1 ) {
 			this.items[i].set.apply(this.items[i], args);
 		}
+
+		this.origin.LinkIsEmitting = false;
 	};
 
 
